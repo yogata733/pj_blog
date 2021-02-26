@@ -4,9 +4,16 @@ from . import models
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.admin import AdminSite
 
+# 関連モデルも同時に修正 - インライン
+class PostInline(admin.TabularInline):
+    model = models.Post
+    fields = ('title', 'body')
+    extra = 1
+
 @admin.register(models.Category)
 class CategoryAdmin(admin.ModelAdmin):
-    pass
+    # 自作のインラインクラスを指定
+    inlines = [PostInline]
 
 
 @admin.register(models.Tag)
@@ -31,8 +38,47 @@ class PostTitleFilter(admin.SimpleListFilter):
         ]
 
 
+from django import forms
+
+# 独自フォームを作成
+class PostAdminForm(forms.ModelForm):
+    class Meta:
+        labels = {
+            'title': 'ブログタイトル',
+        }
+    
+    def clean(self):
+        body = self.cleaned_data.get('body')
+        if '<' in body:
+            raise forms.ValidationError('HTMLタグは使えません。')
+
+
 @admin.register(models.Post)
 class PostAdmin(admin.ModelAdmin):
+    # 編集不可フィールド表示
+    readonly_fields = ('created', 'updated')
+    # フィールド分類表示
+    fieldsets = [
+        (None, {'fields': ('title', )}),
+        ('コンテンツ', {'fields': ('body', )}),
+        ('分類', {'fields': ('category', 'tags')}),
+        ('メタ', {'fields': ('published','created', 'updated')})
+    ]
+    # 独自のフォームを指定
+    form = PostAdminForm
+    # 多対多フィールドを選択しやすくする
+    filter_horizontal = ('tags',)
+    # 保存時に行う処理
+    def save_model(self, request, obj, form, change):
+        print("before save")
+        super().save_model(request, obj, form, change)
+        print("after save")
+    '''
+    # JavaScriptを読み込む
+    class Media:
+        js = ('post.js',)
+    '''
+    
     list_display = ('id', 'title', 'category', 'tags_summary', 'published', 'created', 'updated')
     # N+1問題解消(ForeinKey)
     list_select_related = ('category', )
